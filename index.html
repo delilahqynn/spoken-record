@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spoken Record</title>
+<style>
+  :root{
+    --ink: #1D2B4F;
+    --ink-soft: #3E4C74;
+    --paper: #FAF6ED;
+    --paper-dim: #F0EADA;
+    --gold: #B8912B;
+    --line: #DDD3BB;
+    --live: #C24E3A;
+    --good: #4C7A5E;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .wrap{ width:100%; max-width:640px; padding:28px 20px 60px; }
+  header{ text-align:center; margin-bottom:24px; border-bottom:1px solid var(--line); padding-bottom:20px; }
+  .kicker{ font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--gold); font-weight:600; }
+  h1{ font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif; font-size:34px; font-weight:600; letter-spacing:-0.01em; margin:6px 0 8px; color:var(--ink); }
+  .sub{ font-size:14px; color:var(--ink-soft); line-height:1.5; max-width:440px; margin:0 auto; }
+
+  .stage{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:20px 0 24px; }
+  .mic-btn{ position:relative; width:96px; height:96px; border-radius:50%; border:none; background:var(--ink); color:var(--paper); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .15s ease, background .2s ease; box-shadow:0 6px 18px rgba(29,43,79,0.25); }
+  .mic-btn:active{ transform:scale(0.96); }
+  .mic-btn.live{ background:var(--live); box-shadow:0 6px 18px rgba(194,78,58,0.35); }
+  .mic-btn svg{ width:34px; height:34px; }
+  .pulse-ring{ position:absolute; inset:0; border-radius:50%; border:2px solid var(--live); opacity:0; }
+  .mic-btn.live .pulse-ring{ animation: pulse 1.8s ease-out infinite; }
+  @keyframes pulse{ 0%{ transform:scale(1); opacity:0.6; } 100%{ transform:scale(1.7); opacity:0; } }
+  .status{ font-size:13px; color:var(--ink-soft); display:flex; align-items:center; gap:8px; min-height:18px; }
+  .status .dot{ width:7px; height:7px; border-radius:50%; background:var(--line); }
+  .status.live .dot{ background:var(--live); }
+  .status.live{ color:var(--live); font-weight:600; }
+  .timer{ font-variant-numeric: tabular-nums; font-size:13px; color:var(--ink-soft); }
+
+  .transcript-card{ background:#fff; border:1px solid var(--line); border-radius:10px; min-height:220px; max-height:46vh; overflow-y:auto; padding:20px; line-height:1.7; font-size:16px; }
+  .placeholder{ color:#B7AF9C; font-style:italic; }
+  .final-line{ margin:0 0 12px; }
+  .final-line .ts{ font-size:11px; color:#B7AF9C; margin-right:8px; font-variant-numeric: tabular-nums; }
+  .interim{ color:#9AA3BC; }
+
+  .actions{ display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+  .actions button{ flex:1; min-width:120px; padding:11px 14px; border-radius:8px; border:1px solid var(--line); background:var(--paper-dim); color:var(--ink); font-size:13px; font-weight:600; cursor:pointer; }
+  .actions button:hover{ background:var(--line); }
+  .actions button:disabled{ opacity:0.45; cursor:not-allowed; }
+
+  .save-row{ display:flex; align-items:center; gap:7px; margin-top:10px; font-size:12px; color:#B7AF9C; }
+  .save-dot{ width:6px; height:6px; border-radius:50%; background:#DCD4BE; }
+  .save-row.saved .save-dot{ background:var(--good); }
+  .save-row.saving .save-dot{ background:var(--gold); }
+  .save-row.saved{ color:var(--good); }
+
+  .local-note{ font-size:11px; color:#B7AF9C; margin-top:3px; }
+
+  .summary-section{ margin-top:22px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:18px 20px; display:none; }
+  .summary-section h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink-soft); margin:0 0 4px; }
+  .summary-note{ font-size:11px; color:#B7AF9C; margin-bottom:12px; }
+  .summary-text{ font-size:15px; line-height:1.65; }
+  .summary-actions{ margin-top:12px; }
+  .summary-actions button{ font-size:12px; padding:7px 12px; border-radius:6px; border:1px solid var(--line); background:var(--paper-dim); cursor:pointer; color:var(--ink); }
+
+  .saved-section{ margin-top:34px; border-top:1px solid var(--line); padding-top:18px; }
+  .saved-section h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink-soft); margin:0 0 12px; }
+  .saved-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; margin-bottom:8px; background:#fff; }
+  .saved-item .meta{ flex:1; min-width:0; }
+  .saved-item .meta .when{ font-size:12px; font-weight:600; color:var(--ink); }
+  .saved-item .meta .preview{ font-size:12px; color:#B7AF9C; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .saved-item button{ border:none; background:none; font-size:12px; font-weight:600; color:var(--ink-soft); cursor:pointer; padding:4px 8px; }
+  .saved-item button.danger{ color:var(--live); }
+
+  .notice{ margin-top:20px; padding:14px 16px; border-radius:8px; background:#FBF0E0; border:1px solid #E9CE9A; font-size:13px; line-height:1.6; color:#6B5423; }
+  .notice.error{ background:#FBEAE6; border-color:#E7B7AB; color:#7A3626; }
+
+  .how-section{ margin-top:34px; border-top:1px solid var(--line); padding-top:18px; }
+  .how-section summary{
+    cursor:pointer;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--ink-soft);
+    font-weight:600;
+    list-style:none;
+  }
+  .how-section summary::-webkit-details-marker{ display:none; }
+  .how-section summary::before{ content:'+ '; color:var(--gold); }
+  .how-section[open] summary::before{ content:'– '; }
+  .how-section .how-body{
+    margin-top:14px;
+    font-size:13px;
+    line-height:1.7;
+    color:var(--ink-soft);
+  }
+  .how-section .how-body h3{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink);
+    margin:16px 0 4px;
+  }
+  .how-section .how-body h3:first-child{ margin-top:0; }
+  .how-section .how-body p{ margin:0 0 4px; }
+
+  footer{ margin-top:26px; font-size:12px; color:#B7AF9C; text-align:center; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">Live, on this device</div>
+    <h1>Spoken Record</h1>
+    <p class="sub">Tap the mic and talk. Words appear as you speak. Saved automatically in this browser until you copy or download them.</p>
+  </header>
+
+  <div class="stage">
+    <button class="mic-btn" id="micBtn" aria-label="Start listening">
+      <span class="pulse-ring"></span>
+      <svg id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      </svg>
+    </button>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">Not listening</span></div>
+    <div class="timer" id="timer"></div>
+  </div>
+
+  <div class="transcript-card" id="transcript">
+    <span class="placeholder">Your transcript will show up here.</span>
+  </div>
+
+  <div class="save-row" id="saveRow">
+    <span class="save-dot" id="saveDot"></span>
+    <span id="saveText">Not saved yet</span>
+  </div>
+  <div class="local-note">Not saved online &mdash; stored only in this browser, on this device.</div>
+
+  <div class="actions">
+    <button id="copyBtn" disabled>Copy text</button>
+    <button id="downloadBtn" disabled>Download .txt</button>
+    <button id="shareBtn" disabled style="display:none;">Share&hellip;</button>
+    <button id="summarizeBtn" disabled>Summarize</button>
+    <button id="clearBtn" disabled>Clear</button>
+  </div>
+
+  <div id="noticeArea"></div>
+
+  <div class="summary-section" id="summarySection">
+    <h2>Quick summary</h2>
+    <div class="summary-note">Auto-generated by pulling out the most information-dense sentences. It is not written by AI and can miss nuance, use it as a rough starting point, not a substitute for reading the full transcript.</div>
+    <div class="summary-text" id="summaryText"></div>
+    <div class="summary-actions">
+      <button id="copySummaryBtn" type="button">Copy summary</button>
+    </div>
+  </div>
+
+  <div class="saved-section" id="savedSection" style="display:none;">
+    <h2>Saved on this device</h2>
+    <div id="savedList"></div>
+  </div>
+
+  <details class="how-section">
+    <summary>How this works</summary>
+    <div class="how-body">
+      <h3>Listening</h3>
+      <p>Tap the mic to start. This uses your browser's built-in speech recognition, so your voice is sent to your browser's own recognition service (for example Google's on Chrome, Apple's on Safari) to be converted to text. It's not sent anywhere by this app itself, and this page has no server of its own. It needs an internet connection and a page loaded over https:// (or localhost) to work, plain http will not get microphone access.</p>
+
+      <h3>Autosave</h3>
+      <p>While you're listening, the transcript is saved automatically to this browser's local storage every couple of seconds. That storage lives only on this device, in this browser. It is not synced to the cloud, to OneDrive, or to any other device automatically. Saved sessions appear in the "Saved on this device" list below the transcript, where you can reload or delete them later.</p>
+
+      <h3>Summarize</h3>
+      <p>Pulls out the handful of sentences that repeat the most information-dense words in the transcript. It runs entirely on your device, with no AI and no internet call involved. It's a rough skim, useful as a starting point, not a substitute for reading the full transcript.</p>
+
+      <h3>Copy, Download, Share</h3>
+      <p>Copy puts the transcript on your clipboard. Download saves it as a .txt file to your device's downloads. Share (where your browser supports it) opens your phone's normal share sheet, so you can send the transcript straight to an app like OneDrive, Mail, or Messages in one tap.</p>
+
+      <h3>Privacy</h3>
+      <p>Nothing typed or spoken here is uploaded to any server run by this app. Saved transcripts stay on the device and in the browser where they were recorded, until you choose to copy, download, or share them elsewhere.</p>
+    </div>
+  </details>
+
+  <footer>
+    Uses your browser's built-in speech recognition. Needs a microphone, an internet connection, and must be opened over <strong>https://</strong> (or localhost) &mdash; browsers block microphone access on plain http pages.<br>
+    Works best in Chrome, Edge, or Safari. Nothing here is uploaded to any server. Saved transcripts live only in this browser, on this device &mdash; they will not appear on anyone else's phone or computer.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  const micBtn = document.getElementById('micBtn');
+  const statusEl = document.getElementById('status');
+  const statusText = document.getElementById('statusText');
+  const timerEl = document.getElementById('timer');
+  const transcriptEl = document.getElementById('transcript');
+  const copyBtn = document.getElementById('copyBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const shareBtn = document.getElementById('shareBtn');
+  const summarizeBtn = document.getElementById('summarizeBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const noticeArea = document.getElementById('noticeArea');
+  const saveRow = document.getElementById('saveRow');
+  const saveText = document.getElementById('saveText');
+  const savedSection = document.getElementById('savedSection');
+  const savedList = document.getElementById('savedList');
+  const summarySection = document.getElementById('summarySection');
+  const summaryText = document.getElementById('summaryText');
+  const copySummaryBtn = document.getElementById('copySummaryBtn');
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  let finalChunks = [];
+  let recognition = null;
+  let listening = false;
+  let recognitionActive = false;
+  let startTimestamp = null;
+  let timerInterval = null;
+  let interimSpan = null;
+
+  // ---------- Local autosave (works in any browser, any host) ----------
+  const storageOn = (function(){
+    try{
+      const k = '__test__';
+      window.localStorage.setItem(k, '1');
+      window.localStorage.removeItem(k);
+      return true;
+    }catch(e){ return false; }
+  })();
+
+  let sessionId = null;
+  let saveDebounce = null;
+
+  function newSessionId(){
+    return 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+  }
+
+  function setSaveUI(state, when){
+    saveRow.classList.remove('saved','saving');
+    if(state === 'off'){ saveText.textContent = 'Autosave unavailable in this browser — use Download to save'; }
+    else if(state === 'saving'){ saveRow.classList.add('saving'); saveText.textContent = 'Saving…'; }
+    else if(state === 'saved'){ saveRow.classList.add('saved'); saveText.textContent = 'Saved ' + when; }
+    else { saveText.textContent = 'Not saved yet'; }
+  }
+
+  function loadIndex(){
+    try{
+      const raw = window.localStorage.getItem('sr_sessions_index');
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveIndex(list){
+    try{ window.localStorage.setItem('sr_sessions_index', JSON.stringify(list)); }catch(e){}
+  }
+
+  function persistSession(){
+    if(!storageOn || finalChunks.length === 0) return;
+    setSaveUI('saving');
+    try{
+      const payload = { id: sessionId, startedAt: startTimestamp, updatedAt: Date.now(), chunks: finalChunks };
+      window.localStorage.setItem('sr_transcript_' + sessionId, JSON.stringify(payload));
+      const index = loadIndex();
+      const existing = index.findIndex(s => s.id === sessionId);
+      const entry = { id: sessionId, updatedAt: payload.updatedAt, preview: finalChunks[finalChunks.length - 1].text.slice(0, 60) };
+      if(existing >= 0){ index[existing] = entry; } else { index.unshift(entry); }
+      saveIndex(index);
+      setSaveUI('saved', new Date(payload.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+      renderSavedList();
+    }catch(e){
+      setSaveUI('off');
+    }
+  }
+
+  function queueAutosave(){
+    if(!storageOn) return;
+    clearTimeout(saveDebounce);
+    setSaveUI('saving');
+    saveDebounce = setTimeout(persistSession, 1200);
+  }
+
+  function renderSavedList(){
+    if(!storageOn){ savedSection.style.display = 'none'; return; }
+    const index = loadIndex();
+    if(index.length === 0){ savedSection.style.display = 'none'; return; }
+    savedSection.style.display = 'block';
+    index.sort((a,b) => b.updatedAt - a.updatedAt);
+    savedList.innerHTML = '';
+    index.forEach(entry => {
+      const row = document.createElement('div');
+      row.className = 'saved-item';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const when = document.createElement('div');
+      when.className = 'when';
+      const d = new Date(entry.updatedAt);
+      when.textContent = d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + (entry.id === sessionId ? ' (current)' : '');
+      const preview = document.createElement('div');
+      preview.className = 'preview';
+      preview.textContent = entry.preview || '';
+      meta.appendChild(when); meta.appendChild(preview);
+      const loadBtn = document.createElement('button');
+      loadBtn.textContent = 'Load';
+      loadBtn.addEventListener('click', () => loadSession(entry.id));
+      const delBtn = document.createElement('button');
+      delBtn.className = 'danger';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', () => deleteSession(entry.id));
+      row.appendChild(meta); row.appendChild(loadBtn); row.appendChild(delBtn);
+      savedList.appendChild(row);
+    });
+  }
+
+  function loadSession(id){
+    if(listening){ showNotice('Stop listening before loading a saved transcript.', true); return; }
+    if(finalChunks.length > 0 && !confirm('Loading will replace the transcript currently on screen (it is already saved). Continue?')) return;
+    try{
+      const raw = window.localStorage.getItem('sr_transcript_' + id);
+      const payload = JSON.parse(raw);
+      sessionId = payload.id;
+      startTimestamp = payload.startedAt;
+      finalChunks = payload.chunks;
+      interimSpan = null;
+      summarySection.style.display = 'none';
+      renderTranscript();
+      setSaveUI('saved', new Date(payload.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+      renderSavedList();
+    }catch(e){
+      showNotice('Could not load that saved transcript.', true);
+    }
+  }
+
+  function deleteSession(id){
+    if(!confirm('Delete this saved transcript? This cannot be undone.')) return;
+    try{ window.localStorage.removeItem('sr_transcript_' + id); }catch(e){}
+    const index = loadIndex();
+    saveIndex(index.filter(s => s.id !== id));
+    if(id === sessionId){
+      finalChunks = []; interimSpan = null; sessionId = newSessionId(); startTimestamp = null;
+      summarySection.style.display = 'none';
+      renderTranscript();
+      setSaveUI('idle');
+    }
+    renderSavedList();
+  }
+
+  // ---------- Summarizer (offline, extractive) ----------
+  const STOPWORDS = new Set(("a about above after again against all am an and any are aren't as at be because been before being below between both but by can't cannot could couldn't did didn't do does doesn't doing don't down during each few for from further had hadn't has hasn't have haven't having he he'd he'll he's her here here's hers herself him himself his how how's i i'd i'll i'm i've if in into is isn't it it's its itself let's me more most mustn't my myself no nor not of off on once only or other ought our ours ourselves out over own same shan't she she'd she'll she's should shouldn't so some such than that that's the their theirs them themselves then there there's these they they'd they'll they're they've this those through to too under until up very was wasn't we we'd we'll we're we've were weren't what what's when when's where where's which while who who's whom why why's with won't would wouldn't you you'd you'll you're you've your yours yourself yourselves like just really okay well yeah um uh").split(' '));
+
+  function summarize(fullText, targetSentences){
+    const sentences = fullText.match(/[^.!?]+[.!?]+/g) || [fullText];
+    const cleanSentences = sentences.map(s => s.trim()).filter(s => s.length > 0);
+    if(cleanSentences.length <= targetSentences) return cleanSentences.join(' ');
+
+    const freq = {};
+    cleanSentences.forEach(s => {
+      const words = s.toLowerCase().match(/[a-z']+/g) || [];
+      words.forEach(w => {
+        if(STOPWORDS.has(w) || w.length < 3) return;
+        freq[w] = (freq[w] || 0) + 1;
+      });
+    });
+
+    const scored = cleanSentences.map((s, idx) => {
+      const words = s.toLowerCase().match(/[a-z']+/g) || [];
+      let score = 0;
+      words.forEach(w => { if(freq[w]) score += freq[w]; });
+      const normalized = words.length > 0 ? score / Math.sqrt(words.length) : 0;
+      return { idx, text: s, score: normalized };
+    });
+
+    scored.sort((a,b) => b.score - a.score);
+    const top = scored.slice(0, targetSentences).sort((a,b) => a.idx - b.idx);
+    return top.map(s => s.text).join(' ');
+  }
+
+  summarizeBtn.addEventListener('click', function(){
+    const fullText = finalChunks.map(c => c.text).join(' ');
+    if(!fullText.trim()) return;
+    const wordCount = (fullText.match(/\S+/g) || []).length;
+    const targetSentences = wordCount > 1200 ? 8 : wordCount > 500 ? 6 : wordCount > 150 ? 4 : 2;
+    const result = summarize(fullText, targetSentences);
+    summaryText.textContent = result;
+    summarySection.style.display = 'block';
+    summarySection.scrollIntoView({behavior:'smooth', block:'nearest'});
+  });
+
+  copySummaryBtn.addEventListener('click', function(){
+    navigator.clipboard.writeText(summaryText.textContent).then(function(){
+      const original = copySummaryBtn.textContent;
+      copySummaryBtn.textContent = 'Copied';
+      setTimeout(() => copySummaryBtn.textContent = original, 1400);
+    });
+  });
+
+  // ---------- Helpers ----------
+  function showNotice(msg, isError){
+    noticeArea.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'notice' + (isError ? ' error' : '');
+    div.innerHTML = msg;
+    noticeArea.appendChild(div);
+  }
+  function fmtClock(ms){
+    const totalSec = Math.floor(ms/1000);
+    const h = Math.floor(totalSec/3600);
+    const m = Math.floor((totalSec%3600)/60);
+    const s = totalSec%60;
+    const pad = n => String(n).padStart(2,'0');
+    return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  }
+  function fmtStamp(d){ return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+  function updateTimer(){
+    if(!startTimestamp){ timerEl.textContent = ''; return; }
+    timerEl.textContent = fmtClock(Date.now() - startTimestamp);
+  }
+
+  function renderTranscript(){
+    if(finalChunks.length === 0 && !interimSpan){
+      transcriptEl.innerHTML = '<span class="placeholder">Your transcript will show up here.</span>';
+    } else {
+      transcriptEl.innerHTML = '';
+      finalChunks.forEach(chunk => {
+        const p = document.createElement('p');
+        p.className = 'final-line';
+        const ts = document.createElement('span');
+        ts.className = 'ts';
+        ts.textContent = chunk.time;
+        p.appendChild(ts);
+        p.appendChild(document.createTextNode(chunk.text));
+        transcriptEl.appendChild(p);
+      });
+      if(interimSpan){
+        const p = document.createElement('p');
+        p.className = 'final-line interim';
+        p.textContent = interimSpan;
+        transcriptEl.appendChild(p);
+      }
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    }
+    const hasText = finalChunks.length > 0;
+    copyBtn.disabled = !hasText;
+    downloadBtn.disabled = !hasText;
+    shareBtn.disabled = !hasText;
+    summarizeBtn.disabled = !hasText;
+    clearBtn.disabled = !hasText;
+    if(hasText){ queueAutosave(); }
+  }
+
+  function setListeningUI(isLive){
+    micBtn.classList.toggle('live', isLive);
+    statusEl.classList.toggle('live', isLive);
+    statusText.textContent = isLive ? 'Listening' : 'Not listening';
+    micBtn.setAttribute('aria-label', isLive ? 'Stop listening' : 'Start listening');
+  }
+
+  if(!SpeechRecognition){
+    micBtn.disabled = true;
+    micBtn.style.opacity = 0.4;
+    micBtn.style.cursor = 'not-allowed';
+    showNotice('This browser does not support live speech recognition. It works in <strong>Chrome</strong>, <strong>Edge</strong>, or <strong>Safari</strong> (14.5+ on iPhone/iPad, 14.1+ on Mac). Firefox does not support it. Please open this page in one of those browsers instead.', true);
+  } else if(window.isSecureContext === false){
+    micBtn.disabled = true;
+    micBtn.style.opacity = 0.4;
+    showNotice('This page needs to be loaded over <strong>https://</strong> (or from localhost) for the microphone to work. It looks like it is currently loaded over plain http.', true);
+  } else {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = (navigator.language || 'en-US');
+
+    recognition.onstart = function(){ recognitionActive = true; };
+
+    recognition.onresult = function(event){
+      let interim = '';
+      for(let i = event.resultIndex; i < event.results.length; i++){
+        const res = event.results[i];
+        if(res.isFinal){
+          const text = res[0].transcript.trim();
+          if(text){ finalChunks.push({ text: text, time: fmtStamp(new Date()) }); }
+        } else {
+          interim += res[0].transcript;
+        }
+      }
+      interimSpan = interim.trim() || null;
+      renderTranscript();
+    };
+
+    recognition.onerror = function(event){
+      if(event.error === 'no-speech') return;
+      if(event.error === 'not-allowed' || event.error === 'service-not-allowed'){
+        listening = false; recognitionActive = false; setListeningUI(false);
+        showNotice('Microphone access was blocked. Allow microphone access for this page in your browser settings, then tap the mic again.', true);
+        return;
+      }
+      if(event.error === 'audio-capture'){
+        listening = false; recognitionActive = false; setListeningUI(false);
+        showNotice('No microphone was found on this device.', true);
+        return;
+      }
+      if(event.error === 'network'){
+        showNotice('Lost the connection needed for recognition. It will keep trying to reconnect &mdash; check your internet connection.', true);
+      }
+    };
+
+    recognition.onend = function(){
+      recognitionActive = false;
+      if(listening){
+        setTimeout(function(){
+          if(listening && !recognitionActive){
+            try{ recognition.start(); }catch(e){}
+          }
+        }, 250);
+      } else {
+        setListeningUI(false);
+        clearInterval(timerInterval);
+      }
+    };
+
+    micBtn.addEventListener('click', function(){
+      if(!listening){
+        listening = true;
+        if(!sessionId){ sessionId = newSessionId(); }
+        startTimestamp = startTimestamp || Date.now();
+        setListeningUI(true);
+        noticeArea.innerHTML = '';
+        try{ recognition.start(); }catch(e){}
+        timerInterval = setInterval(updateTimer, 1000);
+      } else {
+        listening = false;
+        setListeningUI(false);
+        try{ recognition.stop(); }catch(e){}
+        clearInterval(timerInterval);
+      }
+    });
+  }
+
+  copyBtn.addEventListener('click', function(){
+    const text = finalChunks.map(c => `[${c.time}] ${c.text}`).join('\n');
+    navigator.clipboard.writeText(text).then(function(){
+      const original = copyBtn.textContent;
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => copyBtn.textContent = original, 1400);
+    }).catch(function(){
+      showNotice('Could not copy automatically. Select the text in the box above and copy it manually.', true);
+    });
+  });
+
+  function buildTranscriptText(){
+    let text = finalChunks.map(c => `[${c.time}] ${c.text}`).join('\n');
+    if(summarySection.style.display === 'block' && summaryText.textContent.trim()){
+      text = 'SUMMARY\n' + summaryText.textContent.trim() + '\n\nFULL TRANSCRIPT\n' + text;
+    }
+    return text;
+  }
+  function fileStamp(){
+    return new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
+  }
+
+  downloadBtn.addEventListener('click', function(){
+    const text = buildTranscriptText();
+    const blob = new Blob([text], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transcript_${fileStamp()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // Feature-detect file sharing (varies by browser/OS/version) and only
+  // show the button where it will actually work.
+  let canShareFiles = false;
+  try{
+    const probe = new File(['x'], 'probe.txt', {type:'text/plain'});
+    canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [probe] }));
+  }catch(e){ canShareFiles = false; }
+  if(canShareFiles){
+    shareBtn.style.display = '';
+  }
+
+  shareBtn.addEventListener('click', async function(){
+    const text = buildTranscriptText();
+    const file = new File([text], `transcript_${fileStamp()}.txt`, {type:'text/plain'});
+    try{
+      if(navigator.canShare && navigator.canShare({ files: [file] })){
+        await navigator.share({ files: [file], title: 'Transcript' });
+      } else {
+        showNotice('File sharing is not available on this device/browser. Use Download instead, then move the file into OneDrive from your Files app.', true);
+      }
+    }catch(e){
+      // AbortError happens when the person just cancels the share sheet — not an error worth surfacing
+      if(e && e.name !== 'AbortError'){
+        showNotice('Sharing did not go through. Use Download instead, then move the file into OneDrive from your Files app.', true);
+      }
+    }
+  });
+
+  clearBtn.addEventListener('click', function(){
+    if(!confirm('Clear the current transcript? This cannot be undone.')) return;
+    if(storageOn && sessionId){
+      try{ window.localStorage.removeItem('sr_transcript_' + sessionId); }catch(e){}
+      const index = loadIndex();
+      saveIndex(index.filter(s => s.id !== sessionId));
+      renderSavedList();
+    }
+    finalChunks = []; interimSpan = null; startTimestamp = null; sessionId = null;
+    timerEl.textContent = '';
+    summarySection.style.display = 'none';
+    setSaveUI('idle');
+    renderTranscript();
+  });
+
+  // ---------- Init ----------
+  if(!storageOn){ setSaveUI('off'); }
+  renderTranscript();
+  renderSavedList();
+})();
+</script>
+</body>
+</html>
